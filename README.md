@@ -1,2 +1,2 @@
-# LochsSignal
-A simple Signal implementation for use in Roblox.
+# Signal
+A simple yield safe signal implementation for use in Roblox.
