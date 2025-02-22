@@ -1,21 +1,32 @@
 --!strict
 
--- Yield safe Signal implementation in a DOP style.
-
 type callback = (...any) -> ()
 
-export type connection = {
+type ConnectionImplementation = {
+    __index: ConnectionImplementation,
+
+    disconnect: (self: Connection) -> (),
+}
+export type Connection = typeof(setmetatable({} :: {
     isConnected: boolean,
 
-    _signal: signal,
     _callback: callback,
+    _signal: Signal,
 
-    _nextConnection: connection?,
-    _previousConnection: connection?,
+    _next: Connection?,
+    _previous: Connection?,
+}, {} :: ConnectionImplementation))
+
+type SignalImplementation = {
+    __index: SignalImplementation,
+
+    trigger: (self: Signal, ...any) -> (),
+    connect: (self: Signal, callback: callback) -> Connection,
+    disconnectAll: (self: Signal) -> (),
 }
-export type signal = {
-    _headConnection: connection?,
-}
+export type Signal = typeof(setmetatable({} :: {
+    _headConnection: Connection?,
+}, {} :: SignalImplementation))
 
 -- We cache this here to avoid thread creation overhead.
 -- This could be improved with a thread pool, since logically it would
@@ -37,14 +48,33 @@ local function runner(): ()
     end
 end
 
-local function create(): signal
-    return {
-        _headConnection = nil,
-    } :: signal
+local Connection = {} :: ConnectionImplementation
+Connection.__index = Connection
+
+function Connection.disconnect(self: Connection): ()
+    if self.isConnected then
+        self.isConnected = false
+
+        local nextConnection = self._next
+        local previousConnection = self._previous
+        if nextConnection then
+            nextConnection._previous = previousConnection
+            self._next = nil
+        end
+        if previousConnection then
+            previousConnection._next = nextConnection
+            self._previous = nil
+        else
+            self._signal._headConnection = nextConnection
+        end
+    end
 end
 
-local function trigger(signal: signal, ...: any): ()
-    local connection = signal._headConnection
+local Signal = {} :: SignalImplementation
+Signal.__index = Signal
+
+function Signal.trigger(self: Signal, ...: any): ()
+    local connection = self._headConnection
     while connection do
         if not idleRunner then
             idleRunner = task.spawn(runner)
@@ -54,60 +84,60 @@ local function trigger(signal: signal, ...: any): ()
             connection._callback,
             ...
         )
-        connection = connection._nextConnection
+        connection = connection._next
     end
 end
 
-local function connect(signal: signal, callback: callback): connection
-    local connection = {
+function Signal.connect(self: Signal, callback: callback): Connection
+    local connection = setmetatable({
         isConnected = true,
 
-        _signal = signal,
         _callback = callback,
+        _signal = self,
 
-        _nextConnection = nil,
-        _previousConnection = nil,
-    } :: connection
-    local headConnection = signal._headConnection
+        _next = nil,
+        _previous = nil,
+    }, Connection) :: Connection
+    local headConnection = self._headConnection
     if headConnection then
-        connection._nextConnection = headConnection
-        headConnection._previousConnection = connection
+        connection._next = headConnection
+        headConnection._previous = connection
     end
-    signal._headConnection = connection
+    self._headConnection = connection
 
     return connection
 end
 
-local function disconnect(connection: connection): ()
-    if connection.isConnected then
-        connection.isConnected = false
+function Signal.disconnectAll(self: Signal): ()
+    local currentConnection = self._headConnection
+    while currentConnection do
+        local nextConnection = currentConnection._next
 
-        local nextConnection = connection._nextConnection
-        local previousConnection = connection._previousConnection
-        if nextConnection then
-            nextConnection._previousConnection = previousConnection
-        end
-        if previousConnection then
-            previousConnection._nextConnection = nextConnection
-        else
-            connection._signal._headConnection = nextConnection
-        end
+        currentConnection.isConnected = false
+        currentConnection._next = nil
+        currentConnection._previous = nil
+
+        currentConnection = nextConnection
     end
+    self._headConnection = nil
 end
 
-local function disconnectAll(signal: signal): ()
-    local connection = signal._headConnection
-    while connection do
-        connection.isConnected = false
-        connection = connection._nextConnection
+local function is(value: any, name: string): boolean
+    if name == "Signal" then
+        return type(value) == "table" and getmetatable(value) == Signal
+    elseif name == "Connection" then
+        return type(value) == "table" and getmetatable(value) == Connection
     end
-    signal._headConnection = nil
+    return false
+end
+
+local function new(): Signal
+    return setmetatable({
+        _headConnection = nil,
+    }, Signal)
 end
 
 return table.freeze({
-    create = create,
-    trigger = trigger,
-    connect = connect,
-    disconnect = disconnect,
-    disconnectAll = disconnectAll,
+    is = is,
+    new = new,
 })
