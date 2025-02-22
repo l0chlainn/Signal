@@ -1,9 +1,0 @@
-[package]
-name = "l0chlainn/signal"
-description = "Yet another Signal"
-version = "1.0.2"
-license = "MIT"
-authors = ["l0chlainn"]
-registry = "https://github.com/UpliftGames/wally-index"
-realm = "shared"
-include = ["src", "default.project.json", "LICENSE"]
