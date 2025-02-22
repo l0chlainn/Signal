@@ -13,12 +13,12 @@ type Signal = Signal.Signal
 type Connection = Signal.Connection
 
 local signal = Signal.new()
-print("signal is a Signal: ", Signal.isA(signal, "Signal"))
+print("signal is a Signal: ", Signal.isSignal(signal))
 
 local connection = signal:connect(function(...)
     print(...)
 end)
-print("connection is a Connection: ", Signal.isA(connection, "Connection"))
+print("connection is a Connection: ", Signal.isConnection(connection))
 
 signal:trigger("Hello, World!")
 connection:disconnect()

@@ -52,6 +52,10 @@ local function createConnection(signal: Signal, callback: callback): Connection
 end
 
 function Connection.disconnect(self: Connection): ()
+    if not isConnection(self) then
+        error(`expected Connection for self, got '{typeof(self)}'`, 2)
+    end
+
     if self.isConnected then
         self.isConnected = false
 
@@ -88,6 +92,10 @@ local function createSignal(): Signal
 end
 
 function Signal.trigger(self: Signal, ...: any): ()
+    if not isSignal(self) then
+        error(`expected Signal for self, got '{typeof(self)}'`, 2)
+    end
+
     local connection = self._headConnection
     while connection do
         if not idleRunner then
@@ -103,6 +111,12 @@ function Signal.trigger(self: Signal, ...: any): ()
 end
 
 function Signal.connect(self: Signal, callback: callback): Connection
+    if not isSignal(self) then
+        error(`expected Signal for self, got '{typeof(self)}'`, 2)
+    elseif type(callback) ~= "function" then
+        error(`expected function for callback, got '{typeof(callback)}'`, 2)
+    end
+
     local connection = createConnection(self, callback)
     local headConnection = self._headConnection
     if headConnection then
@@ -115,6 +129,10 @@ function Signal.connect(self: Signal, callback: callback): Connection
 end
 
 function Signal.disconnectAll(self: Signal): ()
+    if not isSignal(self) then
+        error(`expected Signal for self, got '{typeof(self)}'`, 2)
+    end
+
     local currentConnection = self._headConnection
     while currentConnection do
         local nextConnection = currentConnection._next
@@ -128,17 +146,8 @@ function Signal.disconnectAll(self: Signal): ()
     self._headConnection = nil
 end
 
-local function isA(value: any, name: string): boolean
-    name = name or "Signal"
-    if name == "Signal" then
-        return isSignal(value)
-    elseif name == "Connection" then
-        return isConnection(value)
-    end
-    return false
-end
-
 return table.freeze({
-    isA = isA,
+    isConnection = isConnection,
+    isSignal = isSignal,
     new = createSignal,
 })
