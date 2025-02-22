@@ -148,6 +148,7 @@ end
 
 return table.freeze({
     isConnection = isConnection,
+
     isSignal = isSignal,
-    new = createSignal,
+    createSignal = createSignal,
 })
