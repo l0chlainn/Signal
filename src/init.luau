@@ -2,32 +2,6 @@
 
 type callback = (...any) -> ()
 
-type ConnectionImplementation = {
-    __index: ConnectionImplementation,
-
-    disconnect: (self: Connection) -> (),
-}
-export type Connection = typeof(setmetatable({} :: {
-    isConnected: boolean,
-
-    _callback: callback,
-    _signal: Signal,
-
-    _next: Connection?,
-    _previous: Connection?,
-}, {} :: ConnectionImplementation))
-
-type SignalImplementation = {
-    __index: SignalImplementation,
-
-    trigger: (self: Signal, ...any) -> (),
-    connect: (self: Signal, callback: callback) -> Connection,
-    disconnectAll: (self: Signal) -> (),
-}
-export type Signal = typeof(setmetatable({} :: {
-    _headConnection: Connection?,
-}, {} :: SignalImplementation))
-
 -- We cache this here to avoid thread creation overhead.
 -- This could be improved with a thread pool, since logically it would
 -- follow that if a thread yields the first call, it's likely to yield
@@ -48,8 +22,34 @@ local function runner(): ()
     end
 end
 
-local Connection = {} :: ConnectionImplementation
+local Connection = {}
 Connection.__index = Connection
+
+export type Connection = typeof(setmetatable({} :: {
+    isConnected: boolean,
+
+    _signal: Signal,
+    _callback: callback,
+
+    _next: Connection?,
+    _previous: Connection?,
+}, Connection))
+
+local function isConnection(value: any): boolean
+    return type(value) == "table" and getmetatable(value) == Connection
+end
+
+local function createConnection(signal: Signal, callback: callback): Connection
+    return setmetatable({
+        isConnected = true,
+
+        _signal = signal,
+        _callback = callback,
+
+        _next = nil,
+        _previous = nil,
+    }, Connection) :: Connection
+end
 
 function Connection.disconnect(self: Connection): ()
     if self.isConnected then
@@ -70,8 +70,22 @@ function Connection.disconnect(self: Connection): ()
     end
 end
 
-local Signal = {} :: SignalImplementation
+local Signal = {}
 Signal.__index = Signal
+
+export type Signal = typeof(setmetatable({} :: {
+    _headConnection: Connection?,
+}, Signal))
+
+local function isSignal(value: any): boolean
+    return type(value) == "table" and getmetatable(value) == Signal
+end
+
+local function createSignal(): Signal
+    return setmetatable({
+        _headConnection = nil,
+    }, Signal)
+end
 
 function Signal.trigger(self: Signal, ...: any): ()
     local connection = self._headConnection
@@ -89,15 +103,7 @@ function Signal.trigger(self: Signal, ...: any): ()
 end
 
 function Signal.connect(self: Signal, callback: callback): Connection
-    local connection = setmetatable({
-        isConnected = true,
-
-        _callback = callback,
-        _signal = self,
-
-        _next = nil,
-        _previous = nil,
-    }, Connection) :: Connection
+    local connection = createConnection(self, callback)
     local headConnection = self._headConnection
     if headConnection then
         connection._next = headConnection
@@ -122,22 +128,17 @@ function Signal.disconnectAll(self: Signal): ()
     self._headConnection = nil
 end
 
-local function is(value: any, name: string): boolean
+local function isA(value: any, name: string): boolean
+    name = name or "Signal"
     if name == "Signal" then
-        return type(value) == "table" and getmetatable(value) == Signal
+        return isSignal(value)
     elseif name == "Connection" then
-        return type(value) == "table" and getmetatable(value) == Connection
+        return isConnection(value)
     end
     return false
 end
 
-local function new(): Signal
-    return setmetatable({
-        _headConnection = nil,
-    }, Signal)
-end
-
 return table.freeze({
-    is = is,
-    new = new,
+    isA = isA,
+    new = createSignal,
 })
