@@ -9,24 +9,30 @@ local Packages = ReplicatedStorage:FindFirstChild("Packages")
 
 local Signal = require(Packages:FindFirstChild("Signal"))
 
-local signal = Signal.createSignal()
-print(`signal is a Signal: {Signal.isSignal(signal)}`)
+type Connection = Signal.Connection
+type Event = Signal.Event
 
-local connection = signal:connect(function(...)
+local Connection = Signal.Connection
+local Event = Signal.Event
+
+local event = Event.new()
+print(`event is a Event: {Event.is(event)}`)
+
+local connection = event:connect(function(...)
     print(...)
 end)
-print(`connection is a Connection: {Signal.isConnection(connection)}`)
+print(`connection is a Connection: {Connection.is(connection)}`)
 
-signal:trigger("Hello, World!")
+event:trigger("Hello, World!")
 connection:disconnect()
-signal:trigger("Goodbye, World!")
+event:trigger("Goodbye, World!")
 
-signal:connect(function(...)
+event:connect(function(...)
     print(...)
 end)
-signal:connect(function(...)
+event:connect(function(...)
     print(...)
 end)
-signal:trigger("Fizz!")
-signal:disconnectAll()
-signal:trigger("Buzz!")
+event:trigger("Fizz!")
+event:disconnectAll()
+event:trigger("Buzz!")
