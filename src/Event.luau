@@ -30,7 +30,9 @@ local Event = {}
 Event.__index = Event
 
 export type Event = typeof(setmetatable({} :: {
+    isFiring: boolean,
     _headConnection: Connection?,
+    _disconnections: {Connection},
 }, Event))
 
 local function isEvent(value: any): boolean
@@ -39,20 +41,45 @@ end
 
 local function createEvent(): Event
     return setmetatable({
+        isFiring = false,
         _headConnection = nil,
+        _disconnections = {},
     }, Event)
 end
 
-function Event._link(self: Event, connection: Connection): ()
-    local headConnection = self._headConnection
-    if headConnection then
-        connection._next = headConnection
-        headConnection._previous = connection
+function Event.fire(self: Event, ...: any): ()
+    if not isEvent(self) then
+        error(`expected Event for self, got '{typeof(self)}'`, 2)
     end
-    self._headConnection = connection
+
+    self.isFiring = true
+
+    local connection = self._headConnection
+    while connection do
+        if connection.isConnected then
+            if not idleRunner then
+                idleRunner = task.spawn(runner)
+            end
+            task.spawn(
+                idleRunner :: thread,
+                connection._callback :: callback,
+                ...
+            )
+        end
+        connection = connection._next
+    end
+
+    -- Any disconnection attempts made while firing are safe to remove now.
+    for _, disconnection in self._disconnections do
+        disconnection._next = nil
+        disconnection._previous = nil
+    end
+    table.clear(self._disconnections)
+
+    self.isFiring = false
 end
 
-function Event._unlink(self: Event, connection: Connection): ()
+function Event._disconnect(self: Event, connection: Connection): ()
     local nextConnection = connection._next
     local previousConnection = connection._previous
     if nextConnection then
@@ -63,24 +90,15 @@ function Event._unlink(self: Event, connection: Connection): ()
     else
         self._headConnection = nextConnection
     end
-end
 
-function Event.trigger(self: Event, ...: any): ()
-    if not isEvent(self) then
-        error(`expected Event for self, got '{typeof(self)}'`, 2)
-    end
-
-    local connection = self._headConnection
-    while connection do
-        if not idleRunner then
-            idleRunner = task.spawn(runner)
-        end
-        task.spawn(
-            idleRunner :: thread,
-            connection._callback,
-            ...
-        )
-        connection = connection._next
+    -- We don't want to mess with a list in use, because it creates
+    -- navigation issues. Instead we'll queue it to be removed later,
+    -- but if the list isn't in use it's safe to remove now.
+    if self.isFiring then
+        table.insert(self._disconnections, connection)
+    else
+        connection._next = nil
+        connection._previous = nil
     end
 end
 
@@ -93,9 +111,15 @@ function Event.connect(self: Event, callback: callback): Connection
 
     local connection
     connection = Connection.new(callback, function()
-        self:_unlink(connection)
+        self:_disconnect(connection)
     end)
-    self:_link(connection)
+
+    local headConnection = self._headConnection
+    if headConnection then
+        connection._next = headConnection
+        headConnection._previous = connection
+    end
+    self._headConnection = connection
 
     return connection
 end
@@ -105,9 +129,26 @@ function Event.disconnectAll(self: Event): ()
         error(`expected Event for self, got '{typeof(self)}'`, 2)
     end
 
+    local isFiring = self.isFiring
+    local disconnections = self._disconnections
     local connection = self._headConnection
     while connection do
-        connection.isConnected = false
+        if connection.isConnected then
+            connection.isConnected = false
+
+            -- It's important to clean these references up, since
+            -- they'll keep the Event alive if this connection isn't
+            -- cleared.
+            connection._callback = nil
+            connection._disconnect = nil
+
+            if isFiring then
+                table.insert(disconnections, connection)
+            else
+                connection._next = nil
+                connection._previous = nil
+            end
+        end
         connection = connection._next
     end
     self._headConnection = nil
