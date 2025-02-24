@@ -48,10 +48,6 @@ local function createEvent(): Event
 end
 
 function Event.fire(self: Event, ...: any): ()
-    if not isEvent(self) then
-        error(`expected Event for self, got '{typeof(self)}'`, 2)
-    end
-
     self.isFiring = true
 
     local connection = self._headConnection
@@ -103,12 +99,6 @@ function Event._disconnect(self: Event, connection: Connection): ()
 end
 
 function Event.connect(self: Event, callback: callback): Connection
-    if not isEvent(self) then
-        error(`expected Event for self, got '{typeof(self)}'`, 2)
-    elseif type(callback) ~= "function" then
-        error(`expected function for callback, got '{typeof(callback)}'`, 2)
-    end
-
     local connection
     connection = Connection.new(callback, function()
         self:_disconnect(connection)
@@ -125,10 +115,6 @@ function Event.connect(self: Event, callback: callback): Connection
 end
 
 function Event.disconnectAll(self: Event): ()
-    if not isEvent(self) then
-        error(`expected Event for self, got '{typeof(self)}'`, 2)
-    end
-
     local isFiring = self.isFiring
     local disconnections = self._disconnections
     local connection = self._headConnection

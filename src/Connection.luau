@@ -23,12 +23,6 @@ local function createConnection(
     callback: callback,
     disconnect: callback
 ): Connection
-    if type(callback) ~= "function" then
-        error(`expected function for callback, got '{typeof(callback)}'`, 2)
-    elseif type(disconnect) ~= "function" then
-        error(`expected function for unlink, got '{typeof(disconnect)}'`, 2)
-    end
-
     return setmetatable({
         isConnected = true,
 
@@ -41,10 +35,6 @@ local function createConnection(
 end
 
 function Connection.disconnect(self: Connection): ()
-    if not isConnection(self) then
-        error(`expected Connection for self, got '{typeof(self)}'`, 2)
-    end
-
     if self.isConnected then
         self.isConnected = false
 
