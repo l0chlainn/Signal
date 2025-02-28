@@ -1,18 +1,6 @@
 {
   "name": "Signal",
   "tree": {
-    "$className": "DataModel",
-
-    "ReplicatedStorage": {
-      "$className": "ReplicatedStorage",
-
-      "Packages": {
-        "$className": "Folder",
-
-        "Signal": {
-          "$path": "src"
-        }
-      }
-    }
+    "$path": "src"
   }
 }
